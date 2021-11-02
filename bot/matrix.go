@@ -185,7 +185,8 @@ func (c *Client) sendMessage(roomID, plain, html string) (err error) {
 		log.Printf("Sending markdown: %s", plain)
 		_, err = room.SendMarkdown(plain)
 	} else {
-		log.Printf("Sending HTML: %s", plain)
+		log.Printf("Sending markdown: %s", plain)
+		log.Printf("Also sending HTML: %s", html)
 		_, err = room.SendHTML(plain, html)
 	}
 
