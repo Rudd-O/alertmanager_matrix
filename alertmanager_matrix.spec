@@ -3,7 +3,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           alertmanager_matrix
-Version:        0.0.2
+Version:        0.0.3
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Service for sending alerts from the Alertmanager webhook to a Matrix room and managing Alertmanager.
 
