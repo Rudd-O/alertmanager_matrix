@@ -131,7 +131,7 @@ func (c *Client) messageHandler(e *gomatrix.Event) {
 	}
 
 	// Execute the given command
-	c.executeCommand(e, strings.Split(text, " ")...)
+	plain, html = c.executeCommand(e, strings.Split(text, " ")...)
 
 	err = c.sendMessage(e.RoomID, plain, html)
 	if err != nil {
