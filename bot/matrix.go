@@ -182,11 +182,8 @@ func (c *Client) sendMessage(roomID, plain, html string) (err error) {
 
 	// Send a Markdown message if no HTML is provided
 	if html == "" {
-		log.Printf("Sending markdown: %s", plain)
 		_, err = room.SendMarkdown(plain)
 	} else {
-		log.Printf("Sending markdown: %s", plain)
-		log.Printf("Also sending HTML: %s", html)
 		_, err = room.SendHTML(plain, html)
 	}
 
