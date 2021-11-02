@@ -30,7 +30,7 @@ rpm: dist
 	cd $(ROOT_DIR) ; mv -f builddir.rpm/*/* . && rm -rf builddir.rpm
 
 bin/$(PROGNAME): alertmanager_matrix.go go.mod go.sum
-	GOBIN=$(ROOT_DIR)/bin go install ./...
+	GOBIN=$(ROOT_DIR)/bin go install -mod=vendor ./...
 
 $(PROGNAME).service: $(PROGNAME).service.in
 	sed 's|@BINDIR@|$(BINDIR)|g;s|@DEFAULTDIR@|$(DEFAULTDIR)|g' < $< > $@
