@@ -1,0 +1,51 @@
+# github.com/beorn7/perks v1.0.1
+github.com/beorn7/perks/quantile
+# github.com/cespare/xxhash/v2 v2.1.0
+github.com/cespare/xxhash/v2
+# github.com/go-kit/kit v0.9.0
+github.com/go-kit/kit/log
+github.com/go-kit/kit/log/level
+# github.com/go-logfmt/logfmt v0.4.0
+github.com/go-logfmt/logfmt
+# github.com/golang/protobuf v1.3.2
+github.com/golang/protobuf/proto
+# github.com/gorilla/mux v1.7.4
+github.com/gorilla/mux
+# github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
+github.com/kr/logfmt
+# github.com/matrix-org/gomatrix v0.0.0-20200128155335-9e7906b6766d
+github.com/matrix-org/gomatrix
+# github.com/matttproud/golang_protobuf_extensions v1.0.1
+github.com/matttproud/golang_protobuf_extensions/pbutil
+# github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223
+github.com/mwitkow/go-conntrack
+# github.com/pkg/errors v0.8.1
+github.com/pkg/errors
+# github.com/prometheus/alertmanager v0.20.0
+github.com/prometheus/alertmanager/client
+github.com/prometheus/alertmanager/config
+github.com/prometheus/alertmanager/types
+# github.com/prometheus/client_golang v1.2.1
+github.com/prometheus/client_golang/api
+github.com/prometheus/client_golang/prometheus
+github.com/prometheus/client_golang/prometheus/internal
+# github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
+github.com/prometheus/client_model/go
+# github.com/prometheus/common v0.7.0
+github.com/prometheus/common/config
+github.com/prometheus/common/expfmt
+github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
+github.com/prometheus/common/model
+# github.com/prometheus/procfs v0.0.5
+github.com/prometheus/procfs
+github.com/prometheus/procfs/internal/fs
+github.com/prometheus/procfs/internal/util
+# github.com/russross/blackfriday/v2 v2.1.0
+github.com/russross/blackfriday/v2
+# golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
+golang.org/x/net/internal/timeseries
+golang.org/x/net/trace
+# golang.org/x/sys v0.0.0-20191010194322-b09406accb47
+golang.org/x/sys/windows
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2
