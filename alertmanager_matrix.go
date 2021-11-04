@@ -126,8 +126,7 @@ func main() {
 	log.Printf("Connected to Matrix homeserver at %s as %s, and to Alertmanager at %s -- Client instance %+v", homeserver, userID, alertmanagerURL, client)
 	// Start syncing
 	go func() {
-		err := client.Run()
-		log.Fatal(err)
+		log.Fatal(client.Run())
 	}()
 
 	// Create/start HTTP server
