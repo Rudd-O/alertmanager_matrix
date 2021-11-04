@@ -88,7 +88,6 @@ func (c *Client) joinRooms(roomList []string) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("Joined room: %s", r)
 		c.rooms[j.RoomID] = struct{}{}
 	}
 
