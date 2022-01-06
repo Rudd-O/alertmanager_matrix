@@ -2,16 +2,14 @@
 
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
-%define gitversion %(git describe --tags | sed 's/^v//' | sed 's/-.*//')
-
 Name:           alertmanager_matrix
-Version:        %{gitversion}
+Version:        0.0.13
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Service for sending alerts from the Alertmanager webhook to a Matrix room and managing Alertmanager.
 
 License:        EUPLv1.2
-URL:            https://github.com/silkeh/%{name}
-Source0:        https://github.com/silkeh/%{name}/archive/{%version}.tar.gz#/%{name}-%{version}.tar.gz
+URL:            https://github.com/Rudd-O/%{name}
+Source0:        https://github.com/Rudd-O/%{name}/archive/{%version}.tar.gz#/%{name}-%{version}.tar.gz
 
 BuildRequires:  make
 BuildRequires:  golang
