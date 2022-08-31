@@ -4,6 +4,7 @@ After=network-online.target
 
 [Service]
 Restart=always
+RestartSec=5s
 DynamicUser=yes
 EnvironmentFile=@DEFAULTDIR@/alertmanager_matrix
 ExecStart=@BINDIR@/alertmanager_matrix
