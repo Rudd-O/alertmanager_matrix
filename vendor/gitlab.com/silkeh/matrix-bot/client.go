@@ -134,12 +134,16 @@ func (c *Client) SetMessageHandler(t EventType, f func(*Event)) {
 }
 
 func (c *Client) handleMessage(e *Event) {
-	if !c.NewRoom(e.RoomID).Allowed() {
+	r := c.NewRoom(e.RoomID)
+	if !r.Allowed() {
 		return
 	}
 
 	if response := c.handleCommand(e); response != nil {
-		_, _ = c.NewRoom(e.RoomID).SendMessage(response)
+		_, err := r.SendMessage(response)
+		if err != nil {
+			_, _ = r.SendText("Error: " + err.Error())
+		}
 	}
 }
 

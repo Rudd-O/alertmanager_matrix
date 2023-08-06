@@ -5,17 +5,19 @@ run:
 linters:
   enable-all: true
   disable:
-    - testpackage       # tests are allowed in the same package
-    - tagliatelle       # json schema of Matrix specs is followed
-    - exhaustivestruct  # structs may be uninitialized
-    - nlreturn          # covered by wsl cuddle rules
-    - paralleltest      # tests are acceptable in sequence
-    - nakedret          # naked returns are acceptable
+    - testpackage    # tests are allowed in the same package
+    - tagliatelle    # json schema of Matrix specs is followed
+    - exhaustruct    # structs may be uninitialized
+    - nlreturn       # covered by wsl cuddle rules
+    - paralleltest   # tests are acceptable in sequence
+    - nakedret       # naked returns are acceptable
+    - nonamedreturns # named returns are acceptable
     # deprecated
     - scopelint
     - interfacer
     - maligned
     - golint
+    - exhaustivestruct
 
 severity:
   default-severity: major
@@ -43,7 +45,6 @@ linters-settings:
       - fieldalignment  # misalignment is accepted
 
   revive:
-    enable-all-rules: true
     rules: # see https://github.com/mgechev/revive#recommended-configuration
       - name: exported
       - name: blank-imports

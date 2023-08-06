@@ -65,11 +65,11 @@ func (r *Room) Allowed() bool {
 }
 
 // Join joins the room.
-func (r *Room) Join() error {
-	_, err := r.client.Client.JoinRoom(r.ID, "", nil)
+func (r *Room) Join() (id string, err error) {
+	resp, err := r.client.Client.JoinRoom(r.ID, "", nil)
 	if err != nil {
-		return fmt.Errorf("unable to join room: %w", err)
+		return "", fmt.Errorf("unable to join room: %w", err)
 	}
 
-	return nil
+	return resp.RoomID, nil
 }
