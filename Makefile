@@ -28,18 +28,19 @@ install-default: build/misc/$(PROGNAME).default
 sources: sources.tar.gz .version
 
 sources.tar.gz:
-	go mod vendor
 	tar --exclude-from=.gitignore -caf sources.tar.gz *
 
 .version:
 	git describe --tags > .version
 
-rpm: sources
+srpm: sources
 	$(MAKE) -C build/package/rpm
+
+rpm: sources
+	$(MAKE) -C build/package/rpm srpm
 
 clean:
 	rm -f *.tar.gz *.rpm .version
 	rm -f $(PROGNAME) $(PROGNAME).service
-	rm -rf vendor
 
 .PHONY: clean dist install-unit install-prog install-default install
