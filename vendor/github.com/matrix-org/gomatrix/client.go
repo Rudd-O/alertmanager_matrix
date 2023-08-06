@@ -53,16 +53,13 @@ func (e HTTPError) Error() string {
 	return fmt.Sprintf("contents=%v msg=%s code=%d wrapped=%s", e.Contents, e.Message, e.Code, wrappedErrMsg)
 }
 
-// BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
+// BuildURL builds a URL with the Client's homeserver/prefix set already.
 func (cli *Client) BuildURL(urlPath ...string) string {
-	ps := []string{cli.Prefix}
-	for _, p := range urlPath {
-		ps = append(ps, p)
-	}
+	ps := append([]string{cli.Prefix}, urlPath...)
 	return cli.BuildBaseURL(ps...)
 }
 
-// BuildBaseURL builds a URL with the Client's homeserver/access_token set already. You must
+// BuildBaseURL builds a URL with the Client's homeserver set already. You must
 // supply the prefix in the path.
 func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	// copy the URL. Purposefully ignore error as the input is from a valid URL already
@@ -75,9 +72,6 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 		hsURL.Path = hsURL.Path + "/"
 	}
 	query := hsURL.Query()
-	if cli.AccessToken != "" {
-		query.Set("access_token", cli.AccessToken)
-	}
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", cli.AppServiceUserID)
 	}
@@ -85,7 +79,7 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	return hsURL.String()
 }
 
-// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver/prefix/access_token set already.
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver/prefix set already.
 func (cli *Client) BuildURLWithQuery(urlPath []string, urlQuery map[string]string) string {
 	u, _ := url.Parse(cli.BuildURL(urlPath...))
 	q := u.Query()
@@ -206,7 +200,13 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	if err != nil {
 		return err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+
+	if cli.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+	}
+
 	res, err := cli.Client.Do(req)
 	if res != nil {
 		defer res.Body.Close()
@@ -357,10 +357,18 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 	return
 }
 
-// Logout the current user. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
+// Logout the current user. See http://matrix.org/docs/spec/client_server/r0.6.0.html#post-matrix-client-r0-logout
 // This does not clear the credentials from the client instance. See ClearCredentials() instead.
 func (cli *Client) Logout() (resp *RespLogout, err error) {
 	urlPath := cli.BuildURL("logout")
+	err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	return
+}
+
+// LogoutAll logs the current user out on all devices. See https://matrix.org/docs/spec/client_server/r0.6.0#post-matrix-client-r0-logout-all
+// This does not clear the credentials from the client instance. See ClearCredentails() instead.
+func (cli *Client) LogoutAll() (resp *RespLogoutAll, err error) {
+	urlPath := cli.BuildURL("logout/all")
 	err = cli.MakeRequest("POST", urlPath, nil, &resp)
 	return
 }
@@ -489,6 +497,29 @@ func (cli *Client) SetAvatarURL(url string) error {
 	return nil
 }
 
+// GetStatus returns the status of the user from the specified MXID. See https://matrix.org/docs/spec/client_server/r0.6.0#get-matrix-client-r0-presence-userid-status
+func (cli *Client) GetStatus(mxid string) (resp *RespUserStatus, err error) {
+	urlPath := cli.BuildURL("presence", mxid, "status")
+	err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+// GetOwnStatus returns the user's status. See https://matrix.org/docs/spec/client_server/r0.6.0#get-matrix-client-r0-presence-userid-status
+func (cli *Client) GetOwnStatus() (resp *RespUserStatus, err error) {
+	return cli.GetStatus(cli.UserID)
+}
+
+// SetStatus sets the user's status. See https://matrix.org/docs/spec/client_server/r0.6.0#put-matrix-client-r0-presence-userid-status
+func (cli *Client) SetStatus(presence, status string) (err error) {
+	urlPath := cli.BuildURL("presence", cli.UserID, "status")
+	s := struct {
+		Presence  string `json:"presence"`
+		StatusMsg string `json:"status_msg"`
+	}{presence, status}
+	err = cli.MakeRequest("PUT", urlPath, &s, nil)
+	return
+}
+
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
@@ -510,7 +541,14 @@ func (cli *Client) SendStateEvent(roomID, eventType, stateKey string, contentJSO
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-text
 func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(roomID, "m.room.message",
-		TextMessage{"m.text", text})
+		TextMessage{MsgType: "m.text", Body: text})
+}
+
+// SendFormattedText sends an m.room.message event into the given room with a msgtype of m.text, supports a subset of HTML for formatting.
+// See https://matrix.org/docs/spec/client_server/r0.6.0#m-text
+func (cli *Client) SendFormattedText(roomID, text, formattedText string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		TextMessage{MsgType: "m.text", Body: text, FormattedBody: formattedText, Format: "org.matrix.custom.html"})
 }
 
 // SendImage sends an m.room.message event into the given room with a msgtype of m.image
@@ -539,7 +577,7 @@ func (cli *Client) SendVideo(roomID, body, url string) (*RespSendEvent, error) {
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
 func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(roomID, "m.room.message",
-		TextMessage{"m.notice", text})
+		TextMessage{MsgType: "m.notice", Body: text})
 }
 
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
@@ -548,6 +586,12 @@ func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *Re
 	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
 	err = cli.MakeRequest("PUT", urlPath, req, &resp)
 	return
+}
+
+// MarkRead marks eventID in roomID as read, signifying the event, and all before it have been read. See https://matrix.org/docs/spec/client_server/r0.6.0#post-matrix-client-r0-rooms-roomid-receipt-receipttype-eventid
+func (cli *Client) MarkRead(roomID, eventID string) error {
+	urlPath := cli.BuildURL("rooms", roomID, "receipt", "m.read", eventID)
+	return cli.MakeRequest("POST", urlPath, nil, nil)
 }
 
 // CreateRoom creates a new Matrix room. See https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
@@ -646,15 +690,21 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+
 	req.ContentLength = contentLength
+
 	res, err := cli.Client.Do(req)
 	if res != nil {
 		defer res.Body.Close()
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	if res.StatusCode != 200 {
 		contents, err := ioutil.ReadAll(res.Body)
 		if err != nil {
@@ -669,10 +719,12 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 			Code:     res.StatusCode,
 		}
 	}
+
 	var m RespMediaUpload
 	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
 		return nil, err
 	}
+
 	return &m, nil
 }
 
