@@ -2,5 +2,4 @@
 /alertmanager_matrix.service
 *.tar.gz
 *.rpm
-/vendor
 /.version
