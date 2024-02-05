@@ -69,11 +69,11 @@ func (a *Alert) StatusString() string {
 // the `resolved` annotation for `resolved` messages,
 // or an empty string if neither annotation is present.
 func (a *Alert) Summary() string {
-	if v, ok := a.Alert.Annotations[summaryAnnotation]; ok {
+	if v, ok := a.Alert.Annotations[resolvedAnnotation]; ok && a.Status == resolvedStatus {
 		return string(v)
 	}
 
-	if v, ok := a.Alert.Annotations[resolvedAnnotation]; ok && a.Status == resolvedStatus {
+	if v, ok := a.Alert.Annotations[summaryAnnotation]; ok {
 		return string(v)
 	}
 
