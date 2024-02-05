@@ -34,10 +34,10 @@ sources.tar.gz:
 	git describe --tags > .version
 
 srpm: sources
-	$(MAKE) -C build/package/rpm
+	$(MAKE) -C build/package/rpm srpm
 
 rpm: sources
-	$(MAKE) -C build/package/rpm srpm
+	$(MAKE) -C build/package/rpm
 
 clean:
 	rm -f *.tar.gz *.rpm .version
