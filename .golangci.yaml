@@ -1,95 +1,99 @@
 ---
-run:
-  skip-dirs:
-    - .go
-
-linters:
-  enable-all: true
-  disable:
-    - testpackage     # tests are allowed in the same package
-    - tagliatelle     # json schema of Matrix specs is followed
-    - exhaustruct     # structs may be uninitialized
-    - nlreturn        # covered by wsl cuddle rules
-    - paralleltest    # tests are acceptable in sequence
-    - nakedret        # naked returns are acceptable
-    - nonamedreturns  # named returns are acceptable
-    # deprecated
-    - scopelint
-    - interfacer
-    - maligned
-    - golint
-    - exhaustivestruct
+version: "2"
 
 severity:
-  default-severity: major
+  default: major
 
-issues:
-  fast: false
-  exclude-use-default: false
-  exclude-case-sensitive: true
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gochecknoglobals
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+  exclusions:
+    generated: lax
+    paths:
+      - '^\\.go$'
+      - third_party$
+      - builtin$
+      - examples$
 
-linters-settings:
-  varnamelen:
-    min-name-length: 1
-
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/silkeh/alertmanager_matrix)
-
-  gosec:
-    excludes:
-      - G404
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment  # misalignment is accepted
-
-  revive:
-    rules: # see https://github.com/mgechev/revive#recommended-configuration
-      - name: exported
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: empty-block
-      - name: superfluous-else
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: redefines-builtin-id
-
-  stylecheck:
-    checks: [all]
-
-  wrapcheck:
-    ignoreSigs:
-      - .Errorf(
-      - errors.New(
-      - errors.Unwrap(
-      - .Wrap(
-      - .Wrapf(
-      - .WithMessage(
-      - .WithMessagef(
-      - .WithStack(
-      - time.ParseDuration(
+linters:
+  default: all
+  disable:
+    - exhaustruct     # structs may be uninitialized
+    - nlreturn        # covered by wsl cuddle rules
+    - nonamedreturns  # named returns are acceptable in short functions
+    - funcorder       # functions are allowed in any order
+  settings:
+    depguard:
+      rules:
+        main:
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/go-openapi
+            - github.com/gorilla/mux
+            - github.com/prometheus/alertmanager
+            - github.com/Masterminds/sprig/v3
+            - gitlab.com/slxh/go/env
+            - gitlab.com/slxh/go/slogutil
+            - gitlab.com/slxh/matrix/alertmanager_matrix
+            - gitlab.com/slxh/matrix/bot
+            - gopkg.in/yaml.v3
+            - maunium.net/go/mautrix
+    govet:
+      enable-all: true
+    mnd:
+      ignored-numbers:
+        - "8"
+        - "16"
+        - "32"
+        - "64"
+        - "10"
+    nolintlint:
+      require-explanation: true
+    paralleltest:
+      ignore-missing: true
+    revive:
+      enable-all-rules: true
+      rules:
+        # conflicts with mnd
+        - name: add-constant
+          disabled: true
+        # named returns are acceptable in short functions
+        - name: bare-return
+          disabled: true
+        # conflicts with lll
+        - name: line-length-limit
+          disabled: true
+        # conflicts with errcheck
+        - name: unhandled-error
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+    varnamelen:
+      min-name-length: 1
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - err113
+          - errcheck
+          - gochecknoglobals
+          - gosec
+          - wrapcheck
+        path: _test\.go
+      - linters: [staticcheck]
+        text: QF1008  # Omit embedded fields from selector expression
+    paths:
+      - '^\\.go$'
+      - third_party$
+      - builtin$
+      - examples$

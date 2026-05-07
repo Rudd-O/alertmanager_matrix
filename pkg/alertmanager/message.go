@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	alertmanager "github.com/prometheus/alertmanager/client"
+	"github.com/prometheus/alertmanager/notify/webhook"
+	"github.com/prometheus/alertmanager/template"
 )
 
 const (
@@ -20,28 +21,20 @@ const (
 
 // Message represents a message received from Alertmanager via webhook.
 type Message struct {
-	Version           string
-	GroupKey          string
-	Status            string
-	Receiver          string
-	GroupLabels       map[string]string
-	CommonLabels      map[string]string
-	CommonAnnotations map[string]string
-	ExternalURL       string
-	Alerts            []*Alert
+	*webhook.Message
+	Alerts []*Alert `json:"alerts"`
 }
 
 // Alert represents an Alert received from Alertmanager via webhook.
 // It is extended with the `status` attribute, and various convenient functions for formatting.
 type Alert struct {
-	*alertmanager.ExtendedAlert
-	Status string `json:"status"`
+	*template.Alert
 }
 
 // AlertName returns the value of the `alertname` label.
 func (a *Alert) AlertName() string {
-	if v, ok := a.ExtendedAlert.Labels[alertNameLabel]; ok {
-		return string(v)
+	if v, ok := a.Labels[alertNameLabel]; ok {
+		return v
 	}
 
 	return ""
@@ -58,8 +51,8 @@ func (a *Alert) StatusString() string {
 		return silencedStatus
 	}
 
-	if sev, ok := a.Alert.Labels[severityLabel]; ok {
-		return string(sev)
+	if sev, ok := a.Labels[severityLabel]; ok {
+		return sev
 	}
 
 	return alertStatus
@@ -69,12 +62,12 @@ func (a *Alert) StatusString() string {
 // the `resolved` annotation for `resolved` messages,
 // or an empty string if neither annotation is present.
 func (a *Alert) Summary() string {
-	if v, ok := a.Alert.Annotations[resolvedAnnotation]; ok && a.Status == resolvedStatus {
-		return string(v)
+	if v, ok := a.Annotations[summaryAnnotation]; ok {
+		return v
 	}
 
-	if v, ok := a.Alert.Annotations[summaryAnnotation]; ok {
-		return string(v)
+	if v, ok := a.Annotations[resolvedAnnotation]; ok && a.Status == resolvedStatus {
+		return v
 	}
 
 	return ""
@@ -82,9 +75,9 @@ func (a *Alert) Summary() string {
 
 // LabelString returns a formatted list of message labels in the form {key="value"}.
 func (a *Alert) LabelString() string {
-	labels := make([]string, 0, len(a.Alert.Labels))
+	labels := make([]string, 0, len(a.Labels))
 
-	for n, v := range a.Alert.Labels {
+	for n, v := range a.Labels {
 		labels = append(labels, fmt.Sprintf(`%s=%q`, n, v))
 	}
 

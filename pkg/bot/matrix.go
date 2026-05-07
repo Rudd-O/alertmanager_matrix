@@ -2,17 +2,22 @@
 package bot
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/go-openapi/strfmt"
+	"github.com/prometheus/alertmanager/api/v2/models"
 	"github.com/prometheus/alertmanager/pkg/labels"
-	"github.com/prometheus/alertmanager/types"
-	bot "gitlab.com/silkeh/matrix-bot"
+	"gitlab.com/slxh/matrix/bot"
+	mevent "maunium.net/go/mautrix/event"
+	mid "maunium.net/go/mautrix/id"
 
-	"github.com/silkeh/alertmanager_matrix/pkg/alertmanager"
+	"gitlab.com/slxh/matrix/alertmanager_matrix/internal/util"
+	"gitlab.com/slxh/matrix/alertmanager_matrix/pkg/alertmanager"
 )
 
 var errNilClientConfig = errors.New("client config cannot be nil")
@@ -32,6 +37,7 @@ type Client struct {
 	Matrix       *bot.Client
 	Alertmanager *alertmanager.Client
 	Formatter    *Formatter
+	startTime    time.Time
 }
 
 // NewClient creates and starts a new Alertmanager/Matrix client.
@@ -42,6 +48,7 @@ func NewClient(config *ClientConfig, formatter *Formatter) (client *Client, err 
 
 	client = &Client{
 		Formatter: formatter,
+		startTime: time.Now(),
 	}
 
 	// Ensure a formatter is set
@@ -52,12 +59,12 @@ func NewClient(config *ClientConfig, formatter *Formatter) (client *Client, err 
 	// Create Alertmanager client
 	client.Alertmanager, err = alertmanager.NewClient(config.AlertManagerURL)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("error creating Alertmanager client: %w", err)
 	}
 
 	// Matrix bot config
 	matrixConfig := &bot.ClientConfig{
-		MessageType:      config.MessageType,
+		MessageType:      mevent.MessageType(config.MessageType),
 		CommandPrefixes:  []string{"!alert", "!alertmanager"},
 		IgnoreHighlights: false,
 	}
@@ -65,12 +72,14 @@ func NewClient(config *ClientConfig, formatter *Formatter) (client *Client, err 
 	// Create Matrix client
 	client.Matrix, err = bot.NewClient(config.Homeserver, config.UserID, config.Token, matrixConfig)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("error creating Matrix client: %w", err)
 	}
 
 	// Create room list
 	if config.Rooms != "" {
-		matrixConfig.AllowedRooms = strings.Split(config.Rooms, ",")
+		for _, room := range strings.Split(config.Rooms, ",") {
+			matrixConfig.AllowedRooms = append(matrixConfig.AllowedRooms, mid.RoomID(room))
+		}
 	}
 
 	// Register commands
@@ -78,15 +87,15 @@ func NewClient(config *ClientConfig, formatter *Formatter) (client *Client, err 
 	client.Matrix.SetCommand("list", client.listCommand())
 	client.Matrix.SetCommand("silence", client.silenceCommand())
 
-	return
+	return client, nil
 }
 
 // mainCommand returns the `alert` bot command.
 func (c *Client) listOnlyCommand() *bot.Command {
 	return &bot.Command{
 		Summary: "Show active alerts.",
-		MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-			return c.Alerts(false, false)
+		MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+			return c.Alerts(context.Background(), false, false)
 		},
 	}
 }
@@ -97,22 +106,22 @@ func (c *Client) listCommand() *bot.Command {
 	cmd.Subcommands = map[string]*bot.Command{
 		"all": {
 			Summary: "Show active and silenced alerts.",
-			MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-				return c.Alerts(true, false)
+			MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+				return c.Alerts(context.Background(), true, false)
 			},
 			Subcommands: map[string]*bot.Command{
 				"labels": {
 					Summary: "Shows label of active and silenced alerts.",
-					MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-						return c.Alerts(true, true)
+					MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+						return c.Alerts(context.Background(), true, true)
 					},
 				},
 			},
 		},
 		"labels": {
 			Summary: "Show labels of active alerts.",
-			MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-				return c.Alerts(false, true)
+			MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+				return c.Alerts(context.Background(), false, true)
 			},
 		},
 	}
@@ -124,20 +133,20 @@ func (c *Client) listCommand() *bot.Command {
 func (c *Client) silenceCommand() *bot.Command {
 	return &bot.Command{
 		Summary: "Show active silences.",
-		MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-			return bot.NewMarkdownMessage(c.Silences("active"))
+		MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+			return bot.NewMarkdownMessage(c.Silences(context.Background(), "active"))
 		},
 		Subcommands: map[string]*bot.Command{
 			"pending": {
 				Summary: "Show pending silences.",
-				MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-					return bot.NewMarkdownMessage(c.Silences("pending"))
+				MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+					return bot.NewMarkdownMessage(c.Silences(context.Background(), "pending"))
 				},
 			},
 			"expired": {
 				Summary: "Shows expired silences.",
-				MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-					return bot.NewMarkdownMessage(c.Silences("expired"))
+				MessageHandler: func(_ mid.UserID, _ string, _ ...string) *bot.Message {
+					return bot.NewMarkdownMessage(c.Silences(context.Background(), "expired"))
 				},
 			},
 			"add": {
@@ -147,32 +156,49 @@ func (c *Client) silenceCommand() *bot.Command {
 					"```\nsilence add 1h job=\"test\",target=~\"test.*\"\n```\n" +
 					"Alternative, an alert fingerprint can be given to match all labels of that alert, for example:\n" +
 					"```\nsilence add 1h 04e45af092081699\n```\n",
-				MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
+				MessageHandler: func(sender mid.UserID, _ string, args ...string) *bot.Message {
 					if len(args) <= 1 {
 						return bot.NewTextMessage("Insufficient arguments.")
 					}
 
-					return bot.NewMarkdownMessage(c.NewSilence(sender, args[0], strings.Join(args[1:], " ")))
+					matchers, comments := splitArgs(args[1:])
+
+					return bot.NewMarkdownMessage(c.NewSilence(context.Background(),
+						sender.String(), args[0], matchers, comments))
 				},
 			},
 			"del": {
 				Summary: "Delete a silence by ID.",
-				MessageHandler: func(sender, cmd string, args ...string) *bot.Message {
-					return bot.NewMarkdownMessage(c.DelSilence(args))
+				MessageHandler: func(_ mid.UserID, _ string, args ...string) *bot.Message {
+					return bot.NewMarkdownMessage(c.DelSilence(context.Background(), args))
 				},
 			},
 		},
 	}
 }
 
+func splitArgs(args []string) (matcherStr, commentStr string) {
+	var matchers, comments []string
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "\n") {
+			comments = append(comments, arg[1:])
+		} else {
+			matchers = append(matchers, arg)
+		}
+	}
+
+	return strings.Join(matchers, " "), strings.Join(comments, "\n")
+}
+
 // Run the client in a blocking thread.
 func (c *Client) Run() error {
-	err := c.joinRooms(c.Matrix.Config.AllowedRooms)
+	err := c.joinRooms(context.Background(), c.Matrix.Config.AllowedRooms)
 	if err != nil {
 		return err
 	}
 
-	err = c.Matrix.Run()
+	err = c.Matrix.Run(context.Background())
 	if err != nil {
 		return fmt.Errorf("matrix error: %w", err)
 	}
@@ -181,9 +207,9 @@ func (c *Client) Run() error {
 }
 
 // joinRooms joins a list of room IDs or aliases.
-func (c *Client) joinRooms(roomList []string) error {
+func (c *Client) joinRooms(ctx context.Context, roomList []mid.RoomID) error {
 	for i, r := range roomList {
-		id, err := c.Matrix.NewRoom(r).Join()
+		id, err := c.Matrix.NewRoom(r).Join(ctx)
 		if err != nil {
 			return fmt.Errorf("cannot join room %q: %w", r, err)
 		}
@@ -195,8 +221,8 @@ func (c *Client) joinRooms(roomList []string) error {
 }
 
 // Alerts returns all or non-silenced alerts.
-func (c *Client) Alerts(silenced bool, labels bool) *bot.Message {
-	alerts, err := c.Alertmanager.GetAlerts(silenced)
+func (c *Client) Alerts(ctx context.Context, silenced bool, showLabels bool) *bot.Message {
+	alerts, err := c.Alertmanager.GetAlerts(ctx, silenced)
 	if err != nil {
 		return bot.NewTextMessage(err.Error())
 	}
@@ -205,14 +231,14 @@ func (c *Client) Alerts(silenced bool, labels bool) *bot.Message {
 		return bot.NewTextMessage("No alerts")
 	}
 
-	return bot.NewHTMLMessage(c.Formatter.FormatAlerts(alerts, labels))
+	return bot.NewHTMLMessage(c.Formatter.FormatAlerts(alerts, showLabels))
 }
 
 // Silences returns a Markdown formatted NewMessage containing silences with the specified state.
-func (c *Client) Silences(state string) string {
-	silences, err := c.Alertmanager.Silence.List(context.TODO(), "")
+func (c *Client) Silences(ctx context.Context, state string) string {
+	silences, err := c.Alertmanager.GetSilences(ctx)
 	if err != nil {
-		return err.Error()
+		return fmt.Sprintf("Alertmanager error: %s", err)
 	}
 
 	md := c.Formatter.FormatSilences(silences, state)
@@ -225,34 +251,40 @@ func (c *Client) Silences(state string) string {
 }
 
 // NewSilence creates a new silence and returns the ID.
-func (c *Client) NewSilence(author, durationStr string, matchers string) string {
+func (c *Client) NewSilence(ctx context.Context, author, durationStr, matchers, comment string) string {
 	duration, err := parseDuration(durationStr)
 	if err != nil {
 		return err.Error()
 	}
 
-	silence := types.Silence{
-		Matchers:  make(labels.Matchers, len(matchers)),
-		StartsAt:  time.Now(),
-		EndsAt:    time.Now().Add(duration),
-		CreatedBy: author,
-		Comment:   "Created from Matrix",
+	silence := alertmanager.Silence{
+		GettableSilence: &models.GettableSilence{
+			Silence: models.Silence{
+				Matchers:  make(models.Matchers, 0, len(matchers)),
+				StartsAt:  util.PtrTo(strfmt.DateTime(time.Now())),
+				EndsAt:    util.PtrTo(strfmt.DateTime(time.Now().Add(duration))),
+				CreatedBy: &author,
+				Comment:   util.PtrTo(cmp.Or(comment, "Created from Matrix")),
+			},
+		},
 	}
 
 	// Check if an ID is given instead of matchers
 	if !strings.ContainsAny(matchers, `{"=~!}`) {
-		res := c.addSilenceForFingerprint(&silence, matchers)
+		res := c.addSilenceForFingerprint(ctx, &silence.Silence, matchers)
 		if res != "" {
 			return res
 		}
 	} else {
-		silence.Matchers, err = labels.ParseMatchers(matchers)
-		if err != nil {
-			return fmt.Sprintf("Invalid matchers: %s", err)
+		ms, parseErr := labels.ParseMatchers(matchers)
+		if parseErr != nil {
+			return fmt.Sprintf("Invalid matchers: %s", parseErr)
 		}
+
+		silence.SetMatchers(ms)
 	}
 
-	id, err := c.Alertmanager.Silence.Set(context.Background(), silence)
+	id, err := c.Alertmanager.CreateSilence(ctx, silence)
 	if err != nil {
 		return fmt.Sprintf("Error creating silence: %s", err)
 	}
@@ -260,21 +292,19 @@ func (c *Client) NewSilence(author, durationStr string, matchers string) string 
 	return fmt.Sprintf("Silence created with ID *%s*", id)
 }
 
-func (c *Client) addSilenceForFingerprint(silence *types.Silence, fingerprint string) string {
-	alert, err := c.Alertmanager.GetAlert(fingerprint)
+func (c *Client) addSilenceForFingerprint(ctx context.Context, silence *models.Silence, fingerprint string) string {
+	alert, err := c.Alertmanager.GetAlert(ctx, fingerprint)
 	if err != nil {
-		return err.Error()
+		return fmt.Sprintf("Error: %s", err)
 	}
 
-	if alert == nil {
-		return fmt.Sprintf("No alert with fingerprint %s", fingerprint)
-	}
-
-	silence.Matchers = make(labels.Matchers, 0, len(alert.Labels))
+	silence.Matchers = make(models.Matchers, 0, len(alert.Labels))
 	for name, value := range alert.Labels {
-		silence.Matchers = append(silence.Matchers, &labels.Matcher{
-			Name:  string(name),
-			Value: string(value),
+		silence.Matchers = append(silence.Matchers, &models.Matcher{
+			IsEqual: util.PtrTo(true),
+			IsRegex: util.PtrTo(false),
+			Name:    util.PtrTo(name),
+			Value:   util.PtrTo(value),
 		})
 	}
 
@@ -282,23 +312,23 @@ func (c *Client) addSilenceForFingerprint(silence *types.Silence, fingerprint st
 }
 
 // DelSilence deletes silences.
-func (c *Client) DelSilence(ids []string) string {
+func (c *Client) DelSilence(ctx context.Context, ids []string) string {
 	if len(ids) == 0 {
 		return "No silence IDs provided"
 	}
 
-	var errors []string
+	var errs []string
 
 	for _, id := range ids {
-		err := c.Alertmanager.Silence.Expire(context.TODO(), id)
+		err := c.Alertmanager.DeleteSilence(ctx, id)
 		if err != nil {
-			errors = append(errors,
+			errs = append(errs,
 				fmt.Sprintf("Error deleting %s: %s", id, err))
 		}
 	}
 
-	if errors != nil {
-		return strings.Join(errors, "\n\n")
+	if errs != nil {
+		return strings.Join(errs, "\n\n")
 	}
 
 	return fmt.Sprintf(

@@ -5,20 +5,23 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/mux"
+	"gitlab.com/slxh/go/env"
 	"gopkg.in/yaml.v3"
+	mid "maunium.net/go/mautrix/id"
 
-	"github.com/silkeh/alertmanager_matrix/pkg/alertmanager"
-	bot2 "github.com/silkeh/alertmanager_matrix/pkg/bot"
+	"gitlab.com/slxh/matrix/alertmanager_matrix/pkg/alertmanager"
+	bot2 "gitlab.com/slxh/matrix/alertmanager_matrix/pkg/bot"
 )
 
 func requestHandler(client *bot2.Client, alertLabels bool, w http.ResponseWriter, r *http.Request) {
 	// Get room from request
-	room := client.Matrix.NewRoom(mux.Vars(r)["room"])
+	room := client.Matrix.NewRoom(mid.RoomID(mux.Vars(r)["room"]))
 	if room.ID == "" || room.ID[0] != '!' {
 		log.Printf("Invalid room ID: %q", room.ID)
 		w.WriteHeader(http.StatusBadRequest)
@@ -39,22 +42,16 @@ func requestHandler(client *bot2.Client, alertLabels bool, w http.ResponseWriter
 	plain, html := client.Formatter.FormatAlerts(data.Alerts, alertLabels)
 	log.Printf("Sending message to %s: %s", room.ID, plain)
 
-	if _, err := room.SendHTML(plain, html); err != nil {
+	if _, err := room.SendHTML(r.Context(), plain, html); err != nil {
 		log.Printf("Error sending message: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
-	}
-}
-
-func setStringFromEnv(target *string, env string) {
-	if str := os.Getenv(env); str != "" {
-		*target = str
 	}
 }
 
 func loadFile(fileName string) string {
 	contents, err := os.ReadFile(fileName) //nolint:gosec // contents inclusion is the point
 	if err != nil {
-		log.Fatalf("Unable to read file %q: %s", fileName, err)
+		log.Fatalf("Unable to read file %q: %s", fileName, err) //nolint:revive // only called in main()
 	}
 
 	return string(contents)
@@ -63,7 +60,7 @@ func loadFile(fileName string) string {
 func mapFromYAMLFile(fileName string) map[string]string {
 	file, err := os.Open(fileName) //nolint:gosec // file inclusion is the point
 	if err != nil {
-		log.Fatalf("Unable to open YAML file %q: %s", fileName, err)
+		log.Fatalf("Unable to open YAML file %q: %s", fileName, err) //nolint:revive // only called in main()
 	}
 
 	m := make(map[string]string)
@@ -72,7 +69,7 @@ func mapFromYAMLFile(fileName string) map[string]string {
 	if err != nil {
 		_ = file.Close()
 
-		log.Fatalf("Unable to parse YAML file %q: %s", fileName, err)
+		log.Fatalf("Unable to parse YAML file %q: %s", fileName, err) //nolint:revive // only called in main()
 	}
 
 	_ = file.Close()
@@ -105,15 +102,34 @@ func formatter(colorFile, iconFile, htmlTemplateFile, textTemplateFile string) *
 	return bot2.NewFormatter(textTemplate, htmlTemplate, colors, icons)
 }
 
+func parseLogLevel(s string) (l slog.Level, err error) {
+	err = l.UnmarshalText([]byte(s))
+
+	return
+}
+
+func configureLogger(level string) error {
+	lvl, err := parseLogLevel(level)
+	if err != nil {
+		return err
+	}
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: lvl,
+	})))
+
+	return nil
+}
+
 func main() {
-	var addr, iconFile, colorFile, htmlTemplateFile, textTemplateFile string
+	var addr, iconFile, colorFile, htmlTemplateFile, textTemplateFile, logLevel string
 
 	config := bot2.ClientConfig{}
 	alertLabels := false
 
 	flag.StringVar(&addr, "addr", ":4051", "Address to listen on.")
 	flag.StringVar(&config.Homeserver, "homeserver", "http://localhost:8008", "Homeserver to connect to.")
-	flag.StringVar(&config.UserID, "userID", "", "User ID to connect with.")
+	flag.StringVar(&config.UserID, "user-id", "", "User ID to connect with.")
 	flag.StringVar(&config.Token, "token", "", "Token to connect with.")
 	flag.StringVar(&config.Rooms, "rooms", "", "Comma separated list of allowed rooms. All rooms are allowed by default.")
 	flag.StringVar(&config.AlertManagerURL, "alertmanager", "http://localhost:9093", "Alertmanager to connect to.")
@@ -122,16 +138,16 @@ func main() {
 	flag.StringVar(&colorFile, "color-file", "", "YAML file with colors for message types.")
 	flag.StringVar(&htmlTemplateFile, "html-template", "", "HTML template for alert messages.")
 	flag.StringVar(&textTemplateFile, "text-template", "", "Plain-text template for alert messages.")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level")
 	flag.BoolVar(&alertLabels, "show-labels", false, "show labels of alerts messages.")
-	flag.Parse()
 
-	// Set variables from the environment
-	setStringFromEnv(&addr, "ADDR")
-	setStringFromEnv(&config.Homeserver, "HOMESERVER")
-	setStringFromEnv(&config.UserID, "USER_ID")
-	setStringFromEnv(&config.Token, "TOKEN")
-	setStringFromEnv(&config.AlertManagerURL, "ALERTMANAGER")
-	setStringFromEnv(&config.Rooms, "ROOMS")
+	if err := env.ParseWithFlags(); err != nil {
+		log.Fatalf("Error parsing flags and environment variables: %s", err)
+	}
+
+	if err := configureLogger(logLevel); err != nil {
+		log.Fatalf("Error configuring logger: %s", err)
+	}
 
 	if config.UserID == "" || config.Token == "" {
 		log.Fatal("Error: user ID or token not supplied")
