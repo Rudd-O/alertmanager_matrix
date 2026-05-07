@@ -1,0 +1,84 @@
+---
+linters:
+  enable-all: true
+  disable:
+    - testpackage     # tests are allowed in the same package
+    - tagliatelle     # json schema of Matrix specs is followed
+    - exhaustruct     # structs may be uninitialized
+    - nlreturn        # covered by wsl cuddle rules
+    - paralleltest    # tests are acceptable in sequence
+    - nakedret        # naked returns are acceptable
+    - nonamedreturns  # named returns are acceptable
+    # deprecated
+    - execinquery
+    - gomnd
+
+severity:
+  default-severity: major
+
+issues:
+  fast: false
+  exclude-use-default: false
+  exclude-case-sensitive: true
+  exclude-dirs:
+    - .go
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gochecknoglobals
+
+linters-settings:
+  depguard:
+    rules:
+      main:
+        list-mode: strict
+        allow:
+          - $gostd
+          - github.com/russross/blackfriday/v2
+          - github.com/stretchr/testify
+          - gitlab.com/slxh/go/slogutil
+          - gitlab.com/slxh/matrix/bot
+          - maunium.net/go/mautrix
+
+  gosec:
+    excludes:
+      - G404
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # misalignment is accepted
+
+  revive:
+    rules:  # see https://github.com/mgechev/revive#recommended-configuration
+      - name: exported
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  stylecheck:
+    checks: [all]
+
+  varnamelen:
+    min-name-length: 1
