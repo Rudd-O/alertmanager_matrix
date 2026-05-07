@@ -28,7 +28,7 @@ install-default: build/misc/$(PROGNAME).default
 sources: sources.tar.gz .version
 
 sources.tar.gz:
-	tar --exclude-from=.gitignore -caf sources.tar.gz *
+	tar --exclude=./alertmanager_matrix --exclude=./alertmanager_matrix.service --exclude=*.tar.gz --exclude=*.rpm -caf sources.tar.gz ./*
 
 .version:
 	git describe --tags > .version
